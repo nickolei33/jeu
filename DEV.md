@@ -53,3 +53,8 @@ This is exactly the technique described in the Noita tech talk:
 - Material particles: `G.CONF.MAT_PARTICLES` + per-material params in `material_particles.js`
 - Liquid “spray feel”: `depositLiquid()` in `spells.js`
 
+## GitHub workflow
+
+- Check `git status` after changes.
+- Commit updates with a clear message.
+- Push to GitHub when requested by the maintainer (do not push automatically).
