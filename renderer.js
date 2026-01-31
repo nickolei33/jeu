@@ -180,6 +180,7 @@
     [MAT.SANDSTONE]: { pal: [[196, 156, 92], [176, 140, 80], [210, 172, 104], [186, 148, 86]], edge: true, hi: 1.12, lo: 0.84, edgeMul: 0.76 },
 
     [MAT.WOOD]: { pal: [[168, 110, 62], [146, 90, 50], [130, 78, 42], [158, 100, 56]], edge: true, hi: 1.12, lo: 0.84, edgeMul: 0.78 },
+    [MAT.LEAVES]: { pal: [[46, 108, 62], [38, 92, 54], [58, 130, 74], [32, 80, 46]], edge: true, hi: 1.10, lo: 0.86, edgeMul: 0.80 },
 
     [MAT.WATER]: { pal: [[40, 112, 210], [54, 128, 224], [34, 98, 198], [70, 144, 236]], edge: "surface", hi: 1.16, lo: 0.92, edgeMul: 0.90 },
     [MAT.OIL]: { pal: [[88, 70, 46], [76, 60, 38], [66, 52, 32], [104, 84, 52]], edge: "surface", hi: 1.10, lo: 0.86, edgeMul: 0.88 },
@@ -2214,6 +2215,7 @@
     renderBrushPreview();
     if (G.renderHUD) G.renderHUD();
     if (G.renderHelp) G.renderHelp();
+    if (G.renderGenDebug) G.renderGenDebug();
     if (G.renderMenu) G.renderMenu();
 
     if (G._booting) {

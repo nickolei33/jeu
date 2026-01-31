@@ -27,6 +27,7 @@
     PACKED_SNOW: 13,
     DARK_ROCK: 14,
     SANDSTONE: 15,
+    LEAVES: 16,
   };
   const { MAT } = G;
 
@@ -108,6 +109,19 @@
         igniteAt: 240,
         igniteTo: MAT.FIRE,
         prob: 0.05,
+      },
+      tags: ['flammable'],
+    },
+    {
+      id: MAT.LEAVES,
+      name: 'LEAVES',
+      cat: CAT.POWDER,
+      density: 70,
+      tCond: 0.04,
+      phase: {
+        igniteAt: 210,
+        igniteTo: MAT.FIRE,
+        prob: 0.08,
       },
       tags: ['flammable'],
     },
@@ -306,7 +320,7 @@
   G.isTerrain = (m) => (m !== MAT.EMPTY && !G.isGas(m) && !G.isLiquid(m));
 
   // Player collision: solids always block, powders block but can be "soft" resolved.
-  G.blocksPlayer = (m) => (G.isSolid(m) || G.isPowder(m));
+  G.blocksPlayer = (m) => (m !== MAT.LEAVES && (G.isSolid(m) || G.isPowder(m)));
 
   // Projectiles: what stops a projectile in flight
   G.blocksProjectile = (m) => (m !== MAT.EMPTY && !G.isGas(m) && m !== MAT.WATER && m !== MAT.OIL && m !== MAT.ACID);

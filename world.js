@@ -799,6 +799,7 @@
     // 1) Trees: two depth layers (far = darker/smaller, near = richer)
     // ----------------------
     let x = 16;
+    const drawBgTrees = false;
     while (x < W - 16) {
       const hh = surface[x] | 0;
       const b = (G.surfaceBiome ? (G.surfaceBiome[x] | 0) : G.biomeAt(x, hh + 10));
@@ -808,7 +809,7 @@
         const far = (G.noise01((x + 555) >> 5, (hh + 222) >> 4) < 0.50);
         const step = far ? (16 + G.randi(18)) : (26 + G.randi(30));
 
-        if (density < (far ? 0.62 : 0.52)) {
+        if (drawBgTrees && density < (far ? 0.62 : 0.52)) {
           const size = far ? (18 + G.randi(12)) : (30 + G.randi(26));
           const gy = (hh - (far ? 3 : 2)) | 0;
           drawPine(x | 0, gy, size, far);
@@ -1725,18 +1726,19 @@
         return y;
       }
 
-      function setWoodAir(x, y) {
+      const LEAF_ANCHOR = 6;
+
+      function setLeavesAir(x, y) {
         if (x <= 1 || x >= W - 2 || y <= 1 || y >= H - 2) return;
         const i = G.idx(x, y);
         if (G.mat[i] !== MAT.EMPTY) return;
-        G.mat[i] = MAT.WOOD;
-        G.life[i] = 0;
+        G.mat[i] = MAT.LEAVES;
+        G.life[i] = LEAF_ANCHOR;
       }
 
       function setWoodSolid(x, y) {
         if (x <= 1 || x >= W - 2 || y <= 1 || y >= H - 2) return;
         const i = G.idx(x, y);
-        if (G.mat[i] === MAT.EMPTY) return;
         G.mat[i] = MAT.WOOD;
         G.life[i] = 0;
       }
@@ -1746,7 +1748,7 @@
         for (let y = topY; y <= botY; y++) {
           for (let x = cx - halfW; x <= cx + halfW; x++) {
             if (x <= 1 || x >= W - 2) return false;
-            if (inProtected(protectedRects, x, y)) return false;
+            if (y >= surface[x] && inProtected(protectedRects, x, y)) return false;
             const i = G.idx(x, y);
             if (G.mat[i] !== MAT.EMPTY) return false;
           }
@@ -1767,6 +1769,12 @@
           for (let x = tx0; x < tx0 + tw; x++) setWoodSolid(x, y);
         }
 
+        // root flare / anchors
+        for (let rx = -2; rx <= 2; rx++) {
+          setWoodSolid(cx + rx, groundY + 1);
+          if ((rx & 1) === 0) setWoodSolid(cx + rx, groundY + 2);
+        }
+
         // canopy (air)
         for (let y = topY; y < topY + canopyH; y++) {
           const t = (y - topY) / Math.max(1, canopyH - 1);
@@ -1775,7 +1783,18 @@
           w = clampI(w + wob, 2, maxW);
           for (let x = cx - w; x <= cx + w; x++) {
             if ((G.hash2i(x, y) & 7) === 0) continue;
-            setWoodAir(x, y);
+            setLeavesAir(x, y);
+          }
+        }
+
+        // branch tufts
+        for (let k = 0; k < 6; k++) {
+          const by = (topY + ((k + 2) * (canopyH / 8)) | 0) + G.randi(3);
+          const dir = (G.hash2i(cx + k * 19, by) & 1) ? 1 : -1;
+          const len = 6 + G.randi(6);
+          for (let t = 2; t < len; t++) {
+            setLeavesAir(cx + dir * t, by);
+            if ((t & 1) === 0) setLeavesAir(cx + dir * t, by + 1);
           }
         }
       }
@@ -1800,7 +1819,22 @@
           const w = (canopyR * Math.sqrt(t)) | 0;
           for (let x = cx - w; x <= cx + w; x++) {
             if ((G.hash2i(x + 7, y) & 9) === 0) continue;
-            setWoodAir(x, y);
+            setLeavesAir(x, y);
+          }
+        }
+
+        // Secondary canopy blobs
+        for (let b = 0; b < 2; b++) {
+          const ox = (G.randi(10) - 5) | 0;
+          const oy = (G.randi(10) - 5) | 0;
+          const r = clampI((canopyR * 0.55) | 0, 6, 16);
+          for (let y = canopyY + oy - r; y <= canopyY + oy + r; y++) {
+            for (let x = cx + ox - r; x <= cx + ox + r; x++) {
+              const dx = x - (cx + ox), dy = y - (canopyY + oy);
+              if (dx * dx + dy * dy > r * r) continue;
+              if ((G.hash2i(x + 11, y) & 7) === 0) continue;
+              setLeavesAir(x, y);
+            }
           }
         }
       }
@@ -1819,22 +1853,23 @@
         }
       }
 
+      let placed = 0;
       let x = 18;
       while (x < W - 18) {
         if (Math.abs(x - spawnX) < spawnSafe) { x += 28; continue; }
 
         const groundY = findGroundYAt(x);
         if (groundY < 8 || groundY >= H - 6) { x += 20; continue; }
-        if (nearProtected(protectedRects, x, groundY, 30)) { x += 22; continue; }
+        // Protected volumes are underground; trees are above surface.
 
         const b = (G.surfaceBiome ? (G.surfaceBiome[x] | 0) : G.biomeAt(x, (groundY + 10) | 0));
         const n = G.noise01(x >> 4, groundY >> 3);
 
-        let density = 0.62;
-        if (b === G.BIOME.SNOW) density = 0.50;
-        else if (b === G.BIOME.MINES) density = 0.58;
-        else if (b === G.BIOME.TOXIC) density = 0.60;
-        else if (b === G.BIOME.DESERT) density = 0.70;
+        let density = 0.56;
+        if (b === G.BIOME.SNOW) density = 0.46;
+        else if (b === G.BIOME.MINES) density = 0.54;
+        else if (b === G.BIOME.TOXIC) density = 0.55;
+        else if (b === G.BIOME.DESERT) density = 0.66;
 
         if (n > density) { x += 24 + G.randi(24); continue; }
 
@@ -1844,16 +1879,16 @@
         }
 
         const r = G.rand01();
-        let totalH = 60 + G.randi(50);
-        let trunkW = 3 + (G.randi(2) & 1);
-        if (b === G.BIOME.SNOW) totalH = 70 + G.randi(60);
-        else if (b === G.BIOME.DESERT) totalH = 40 + G.randi(40);
-        else if (b === G.BIOME.TOXIC) totalH = 55 + G.randi(50);
+        let totalH = 80 + G.randi(70);
+        if (b === G.BIOME.SNOW) totalH = 95 + G.randi(80);
+        else if (b === G.BIOME.DESERT) totalH = 60 + G.randi(50);
+        else if (b === G.BIOME.TOXIC) totalH = 85 + G.randi(70);
+        let trunkW = clampI(((totalH * 0.06) | 0), 3, 7);
 
         const topY = (groundY - totalH) | 0;
         if (topY < 4) { x += 24; continue; }
 
-        const halfW = clampI(((totalH * 0.22) | 0), 6, 20);
+        const halfW = clampI(((totalH * 0.24) | 0), 8, 26);
         if (!canPlaceColumn(x, topY, groundY - 2, halfW)) { x += 22; continue; }
 
         if (b === G.BIOME.DESERT) {
@@ -1867,8 +1902,21 @@
           if (r < 0.6) placeOak(x, groundY, totalH, trunkW);
           else placePine(x, groundY, totalH, trunkW);
         }
+        placed++;
 
-        x += 28 + G.randi(34);
+        x += 34 + G.randi(48);
+      }
+
+      // Fallback: ensure some trees exist (visible + physical)
+      if (placed < 2) {
+        const base = (spawnX + spawnSafe + 140) | 0;
+        for (let k = 0; k < 3; k++) {
+          const tx = clampI((base + k * 160) | 0, 40, W - 41);
+          if (Math.abs(tx - spawnX) < spawnSafe) continue;
+          const gy = findGroundYAt(tx);
+          if (gy < 8 || gy >= H - 6) continue;
+          placePine(tx, gy, 100 + G.randi(40), 4);
+        }
       }
     }
 
@@ -2158,103 +2206,585 @@
     };
   }
 
-  function generateWorld() {
-    if (G.setLoading) G.setLoading('Generating terrain...', 0.3);
-    // Bulk generation mode: helper functions do raw writes for speed.
-    G._bulkGen = true;
+  // =========================================================
+  // World generation v2 (density + CA + biomes)
+  // =========================================================
+  const GEN2 = () => (G.CONF && G.CONF.LEVEL_GEN2) || {};
 
-    const LG = G.CONF.LEVEL_GEN || {};
-    const params = {
-      levelLength: LG.levelLength ?? 0.95,
-      verticality: LG.verticality ?? 0.55,
-      roomCount: LG.roomCount ?? 12,
-      corridorWidth: LG.corridorWidth ?? 22,
-      surfaceRoughness: LG.surfaceRoughness ?? 0.35,
-      hazardRate: LG.hazardRate ?? 0.20,
-      spawnFlatWidth: LG.spawnFlatWidth ?? 320,
-      spawnEntranceOffset: LG.spawnEntranceOffset ?? 140,
-      // Visual/micro dressing controls
-      snowCorniceRate: LG.snowCorniceRate ?? 0.60,
-      icicleRate: LG.icicleRate ?? 0.70,
-      branchCount: LG.branchCount ?? 3,
-      maxRetries: LG.maxRetries ?? 8,
-    };
+  const GEN2_PARAM_DEFS = {
+    surfaceBase: { min: 0.10, max: 0.35, step: 0.02 },
+    surfaceAmp: { min: 0.10, max: 0.35, step: 0.02 },
+    surfaceScale: { min: 140, max: 360, step: 20 },
+    surfaceWarpScale: { min: 240, max: 760, step: 40 },
+    surfaceWarpAmp: { min: 10, max: 90, step: 6 },
 
-    const baseSeed = G.seed | 0;
+    densityScale: { min: 50, max: 140, step: 8 },
+    densityAmp: { min: 0.30, max: 0.85, step: 0.05 },
+    ridgeAmp: { min: 0.15, max: 0.75, step: 0.05 },
+    warpScale: { min: 70, max: 220, step: 10 },
+    warpAmp: { min: 10, max: 70, step: 4 },
 
-    let chosen = null;
-    let ok = false;
+    caveFill: { min: 0.40, max: 0.68, step: 0.02 },
+    caveIter: { min: 2, max: 6, step: 1 },
+    caveScale: { min: 2, max: 3, step: 1 },
+    caveMinDepth: { min: 14, max: 50, step: 4 },
 
-    const maxRetries = clampI(params.maxRetries, 1, 10);
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-      // Fresh world each attempt
-      G.clearWorld();
+    erosionPasses: { min: 1, max: 4, step: 1 },
+    slumpRate: { min: 0.02, max: 0.20, step: 0.02 },
 
-      // Deterministic retry stream without changing the visible seed
-      G.rngState = attemptRngState(baseSeed, attempt);
+    oreRate: { min: 0.08, max: 0.30, step: 0.02 },
+    oreScale: { min: 28, max: 80, step: 4 },
+    pocketRate: { min: 0.04, max: 0.18, step: 0.02 },
+    pocketScale: { min: 40, max: 120, step: 6 },
 
-      computeBiomes2D();
+    tunnelCount: { min: 2, max: 8, step: 1 },
+  };
 
-      // A) Macro: surface
-      const surface = new Int16Array(W);
-      buildSurface(surface, params);
+  function cloneParams(p) {
+    return JSON.parse(JSON.stringify(p));
+  }
 
-      // B) Fill solid world from surface
-      fillWorldFromSurface(surface);
+  function applyGen2Preset(index) {
+    const gen = GEN2();
+    const presets = gen.presets || [];
+    if (!presets.length) return null;
+    const idx = ((index | 0) % presets.length + presets.length) % presets.length;
+    const preset = presets[idx];
+    G.genPresetIndex = idx;
+    G.genPresetName = preset.name || `Preset${idx}`;
+    G.genParams = cloneParams(preset.params || {});
+    return G.genParams;
+  }
 
-      // C) Carve the playable blueprint (rooms + corridors)
-      const layout = carveMacroLayout(surface, params);
+  function ensureGen2Params() {
+    if (!G.genParams) {
+      const gen = GEN2();
+      applyGen2Preset(gen.presetIndex | 0);
+    }
+    return G.genParams || {};
+  }
 
-      // D) Micro dressing (never touching protected layout)
-      decorateWorld(surface, layout, params);
+  G.genNextPreset = () => {
+    const gen = GEN2();
+    const presets = gen.presets || [];
+    if (!presets.length) return;
+    const next = ((G.genPresetIndex | 0) + 1) % presets.length;
+    applyGen2Preset(next);
+    if (G.resetWorldWithSeed) G.resetWorldWithSeed(G.seed | 0);
+  };
 
-      // Borders for stability
-      addBorders();
+  G.genMutateParam = () => {
+    const p = ensureGen2Params();
+    const keys = Object.keys(GEN2_PARAM_DEFS);
+    if (!keys.length) return;
+    const key = keys[G.randi(keys.length)];
+    const def = GEN2_PARAM_DEFS[key];
+    let v = +p[key];
+    if (!Number.isFinite(v)) v = def.min + (def.max - def.min) * 0.5;
+    const dir = (G.rand01() < 0.5) ? -1 : 1;
+    v += dir * def.step;
+    if (def.min !== undefined) v = Math.max(def.min, v);
+    if (def.max !== undefined) v = Math.min(def.max, v);
+    p[key] = v;
+    G.genLastMutate = `${key}=${v.toFixed(2)}`;
+    if (G.resetWorldWithSeed) G.resetWorldWithSeed(G.seed | 0);
+  };
 
-      // Validate
-      const v = validateLayout(layout, attempt);
-      layout.validation = v;
-      layout.surface = surface;
+  G.genRegen = () => {
+    if (G.resetWorldWithSeed) G.resetWorldWithSeed(G.seed | 0);
+  };
 
-      chosen = layout;
-      if (v.ok) {
-        ok = true;
-        break;
+  G.genCycleDebugMode = () => {
+    G.genDebug = G.genDebug || {};
+    G.genDebug.mode = ((G.genDebug.mode | 0) + 1) % 5;
+  };
+
+  function ridge01(n) {
+    return 1 - Math.abs(n * 2 - 1);
+  }
+
+  function fbm2(x, y, scale, oct = 4) {
+    let amp = 0.55;
+    let sum = 0;
+    let norm = 0;
+    let sc = scale;
+    for (let o = 0; o < oct; o++) {
+      sum += amp * G.valueNoise2D(x + o * 997, y + o * 1319, sc);
+      norm += amp;
+      amp *= 0.5;
+      sc *= 0.5;
+    }
+    return norm > 0 ? (sum / norm) : 0.5;
+  }
+
+  function fbm1(x, scale, oct = 4) {
+    let amp = 0.55;
+    let sum = 0;
+    let norm = 0;
+    let sc = scale;
+    for (let o = 0; o < oct; o++) {
+      sum += amp * G.valueNoise1D(x + o * 733, sc);
+      norm += amp;
+      amp *= 0.5;
+      sc *= 0.5;
+    }
+    return norm > 0 ? (sum / norm) : 0.5;
+  }
+
+  function buildBiomeMap(p) {
+    const bw = 96;
+    const bh = 48;
+    const map = new Uint8Array(bw * bh);
+
+    for (let y = 0; y < bh; y++) {
+      for (let x = 0; x < bw; x++) {
+        const wx = (x / bw) * W;
+        const wy = (y / bh) * H;
+
+        const t0 = fbm2(wx + 2000, wy + 7000, 240, 3);
+        const h0 = fbm2(wx + 9000, wy + 1100, 240, 3);
+
+        let temp = t0;
+        let humid = h0;
+
+        // Temperature bias: higher altitude -> colder
+        const alt = 1 - (wy / H);
+        temp = temp * 0.75 + alt * 0.25;
+
+        let biome = G.BIOME.MINES;
+        if (temp < 0.36) biome = G.BIOME.SNOW;
+        else if (temp > 0.70 && humid < 0.42) biome = G.BIOME.DESERT;
+        else if (humid > 0.64) biome = G.BIOME.TOXIC;
+
+        map[x + y * bw] = biome;
       }
     }
 
-    // Emergency fallback: if we somehow failed all attempts, carve a direct corridor.
-    if (chosen && !ok) {
-      const halfW = (chosen.halfW + 6) | 0;
-      const halfH = (chosen.halfH + 6) | 0;
-      carveTube([chosen.entrance, chosen.goal], halfW, halfH);
-      addBorders();
-      chosen.validation = validateLayout(chosen, maxRetries);
+    G.biomeMapW = bw;
+    G.biomeMapH = bh;
+    G.biomeMap = map;
+    G.biomeAt = (x, y) => {
+      const bx = clampI(((x / W) * bw) | 0, 0, bw - 1);
+      const by = clampI(((y / H) * bh) | 0, 0, bh - 1);
+      return map[bx + by * bw] | 0;
+    };
+  }
+
+  function buildHeightmap(p) {
+    const surface = new Int16Array(W);
+    for (let x = 0; x < W; x++) {
+      const warp = (G.valueNoise1D(x + 9000, p.surfaceWarpScale) - 0.5) * p.surfaceWarpAmp;
+      const n = fbm1(x + warp, p.surfaceScale, 4);
+      const base = (H * p.surfaceBase);
+      const amp = (H * p.surfaceAmp);
+      let h = (base + (n - 0.5) * amp + warp * 0.2) | 0;
+      h = clampI(h, 16, H - 32);
+      surface[x] = h;
+    }
+    return surface;
+  }
+
+  function applySpawnPlateau(surface, flatW) {
+    const spawnX = (W * 0.5) | 0;
+    const half = (flatW >> 1) | 0;
+    const left = Math.max(2, (spawnX - half) | 0);
+    const right = Math.min(W - 3, (spawnX + half) | 0);
+    const plateauY = surface[spawnX] | 0;
+
+    const orig = new Int16Array(surface);
+    for (let x = left; x <= right; x++) surface[x] = plateauY;
+
+    const maxStep = 6;
+    const ramp = 80;
+    for (let x = left - ramp; x < left; x++) {
+      if (x < 2 || x >= W - 2) continue;
+      const t = (x - (left - ramp)) / ramp;
+      const u = G.smoothstep(G.clamp(t, 0, 1));
+      surface[x] = ((orig[x] * (1 - u) + plateauY * u) | 0);
+    }
+    for (let x = right + 1; x <= right + ramp; x++) {
+      if (x < 2 || x >= W - 2) continue;
+      const t = (x - (right + 1)) / ramp;
+      const u = G.smoothstep(G.clamp(t, 0, 1));
+      surface[x] = ((plateauY * (1 - u) + orig[x] * u) | 0);
     }
 
-    // Finalize
-    if (chosen?.surface) {
-      // Recompute a *visual* surface after all carving/dressing so that
-      // outdoor visuals (trees, sky cuts, etc.) stay coherent even if
-      // setpieces created chasms/overhangs.
-      const surfaceFinal = new Int16Array(W);
-      for (let x = 0; x < W; x++) {
-        let yFound = (H - 2) | 0;
-        for (let y = 1; y < H - 1; y++) {
-          const m = G.mat[G.idx(x, y)];
-          if (m !== MAT.WOOD && G.blocksPlayer(m)) {
-            yFound = y | 0;
-            break;
+    for (let x = 1; x < W; x++) {
+      const d = surface[x] - surface[x - 1];
+      if (d > maxStep) surface[x] = surface[x - 1] + maxStep;
+      else if (d < -maxStep) surface[x] = surface[x - 1] - maxStep;
+    }
+    for (let x = W - 2; x >= 0; x--) {
+      const d = surface[x] - surface[x + 1];
+      if (d > maxStep) surface[x] = surface[x + 1] + maxStep;
+      else if (d < -maxStep) surface[x] = surface[x + 1] - maxStep;
+    }
+  }
+
+  function densityAt(x, y, surfaceY, p) {
+    const wx = x;
+    const wy = y;
+
+    const warpX = (G.valueNoise2D(wx + 1111, wy + 2222, p.warpScale) - 0.5) * p.warpAmp;
+    const warpY = (G.valueNoise2D(wx + 3333, wy + 4444, p.warpScale) - 0.5) * p.warpAmp;
+
+    const n = fbm2(wx + warpX, wy + warpY, p.densityScale, 4) - 0.5;
+    const r = ridge01(G.valueNoise2D(wx + warpX + 5555, wy + warpY + 6666, p.densityScale * 0.7)) - 0.5;
+
+    const depth = (y - surfaceY) / Math.max(1, p.densityScale);
+    return depth + n * p.densityAmp + r * p.ridgeAmp;
+  }
+
+  function genCavesCA(surface, p) {
+    const ds = p.caveScale | 0;
+    const cw = (W / ds) | 0;
+    const ch = (H / ds) | 0;
+    const cave = new Uint8Array(cw * ch);
+
+    for (let y = 1; y < ch - 1; y++) {
+      for (let x = 1; x < cw - 1; x++) {
+        const wx = x * ds;
+        const wy = y * ds;
+        const surfY = surface[clampI(wx, 0, W - 1)] | 0;
+        if (wy < (surfY + p.caveMinDepth)) {
+          cave[x + y * cw] = 1;
+          continue;
+        }
+        const n = G.valueNoise2D(wx + 7777, wy + 8888, 32);
+        cave[x + y * cw] = (n < p.caveFill) ? 1 : 0;
+      }
+    }
+
+    const iter = clampI(p.caveIter | 0, 1, 8);
+    const tmp = new Uint8Array(cave.length);
+    for (let it = 0; it < iter; it++) {
+      for (let y = 1; y < ch - 1; y++) {
+        for (let x = 1; x < cw - 1; x++) {
+          const i = x + y * cw;
+          let c = 0;
+          c += cave[i - cw - 1]; c += cave[i - cw]; c += cave[i - cw + 1];
+          c += cave[i - 1]; c += cave[i + 1];
+          c += cave[i + cw - 1]; c += cave[i + cw]; c += cave[i + cw + 1];
+          tmp[i] = (c >= 5) ? 1 : 0;
+        }
+      }
+      cave.set(tmp);
+    }
+
+    // Keep largest open region
+    const visited = new Uint8Array(cave.length);
+    let bestCount = -1;
+    let bestSeed = -1;
+    const q = new Int32Array(cave.length);
+
+    for (let y = 1; y < ch - 1; y++) {
+      for (let x = 1; x < cw - 1; x++) {
+        const i = x + y * cw;
+        if (visited[i] || cave[i] !== 0) continue;
+        let qh = 0, qt = 0, count = 0;
+        visited[i] = 1;
+        q[qt++] = i;
+        while (qh < qt) {
+          const cur = q[qh++];
+          count++;
+          const cx = cur % cw;
+          const cy = (cur / cw) | 0;
+          const nei = [cur - 1, cur + 1, cur - cw, cur + cw];
+          for (let k = 0; k < 4; k++) {
+            const ni = nei[k];
+            const nx = ni % cw;
+            const ny = (ni / cw) | 0;
+            if (nx <= 0 || nx >= cw - 1 || ny <= 0 || ny >= ch - 1) continue;
+            if (visited[ni] || cave[ni] !== 0) continue;
+            visited[ni] = 1;
+            q[qt++] = ni;
           }
         }
-        surfaceFinal[x] = yFound;
+        if (count > bestCount) { bestCount = count; bestSeed = i; }
       }
-      chosen.surfaceFinal = surfaceFinal;
-
-      writeSurfaceArrays(surfaceFinal);
-      generateSkyDecor(surfaceFinal, chosen);
-      if (G.rebuildBgCache) G.rebuildBgCache();
     }
+
+    if (bestSeed >= 0) {
+      const keep = new Uint8Array(cave.length);
+      const q2 = new Int32Array(cave.length);
+      let qh = 0, qt = 0;
+      keep[bestSeed] = 1;
+      q2[qt++] = bestSeed;
+      while (qh < qt) {
+        const cur = q2[qh++];
+        const cx = cur % cw;
+        const cy = (cur / cw) | 0;
+        const nei = [cur - 1, cur + 1, cur - cw, cur + cw];
+        for (let k = 0; k < 4; k++) {
+          const ni = nei[k];
+          const nx = ni % cw;
+          const ny = (ni / cw) | 0;
+          if (nx <= 0 || nx >= cw - 1 || ny <= 0 || ny >= ch - 1) continue;
+          if (keep[ni]) continue;
+          if (cave[ni] !== 0) continue;
+          keep[ni] = 1;
+          q2[qt++] = ni;
+        }
+      }
+      for (let i = 0; i < cave.length; i++) {
+        if (cave[i] === 0 && !keep[i]) cave[i] = 1;
+      }
+    }
+
+    let openCount = 0;
+    for (let i = 0; i < cave.length; i++) if (cave[i] === 0) openCount++;
+    const openRatio = openCount / Math.max(1, cave.length);
+    return { cave, cw, ch, ds, openRatio };
+  }
+
+  function carveFromCaves(caveData) {
+    const { cave, cw, ch, ds } = caveData;
+    for (let y = 1; y < ch - 1; y++) {
+      for (let x = 1; x < cw - 1; x++) {
+        if (cave[x + y * cw] !== 0) continue;
+        const wx = x * ds;
+        const wy = y * ds;
+        for (let yy = 0; yy < ds; yy++) {
+          for (let xx = 0; xx < ds; xx++) {
+            const gx = wx + xx;
+            const gy = wy + yy;
+            if (gx <= 1 || gx >= W - 1 || gy <= 1 || gy >= H - 1) continue;
+            const i = G.idx(gx, gy);
+            G.mat[i] = MAT.EMPTY;
+            G.life[i] = 0;
+          }
+        }
+      }
+    }
+  }
+
+  function carveWorm(ax, ay, bx, by, r) {
+    let x = ax, y = ay;
+    const maxSteps = 2000;
+    for (let s = 0; s < maxSteps; s++) {
+      const dx = bx - x;
+      const dy = by - y;
+      const d = Math.hypot(dx, dy);
+      if (d < r + 2) break;
+      const nx = dx / Math.max(1e-6, d);
+      const ny = dy / Math.max(1e-6, d);
+      const jx = (G.rand01() - 0.5) * 1.2;
+      const jy = (G.rand01() - 0.5) * 1.2;
+      x += (nx + jx) * 2.4;
+      y += (ny + jy) * 2.4;
+      carveCircle(x | 0, y | 0, r);
+    }
+  }
+
+  function applyErosion(surface, p) {
+    const passes = clampI(p.erosionPasses | 0, 1, 5);
+    const slump = +(p.slumpRate || 0.08);
+
+    for (let pass = 0; pass < passes; pass++) {
+      for (let x = 2; x < W - 2; x++) {
+        const yMax = clampI((surface[x] + 220) | 0, 2, H - 3);
+        for (let y = 2; y <= yMax; y++) {
+          const i = G.idx(x, y);
+          const m = G.mat[i];
+          if (!G.isTerrain(m)) continue;
+          const below = G.mat[i + W];
+          if (below !== MAT.EMPTY) continue;
+          if (G.rand01() > slump) continue;
+          G.swapCells(i, i + W);
+        }
+      }
+    }
+  }
+
+  function applyStrata(surface, p) {
+    for (let x = 1; x < W - 1; x++) {
+      const y0 = surface[x] | 0;
+      const biome = G.surfaceBiome ? (G.surfaceBiome[x] | 0) : G.biomeAt(x, y0);
+
+      let topMat = MAT.DIRT;
+      let topDepth = 3;
+      if (biome === G.BIOME.SNOW) { topMat = MAT.SNOW; topDepth = 3; }
+      if (biome === G.BIOME.DESERT) { topMat = MAT.SAND; topDepth = 4; }
+      if (biome === G.BIOME.TOXIC) { topMat = MAT.DIRT; topDepth = 3; }
+
+      for (let k = 0; k < topDepth; k++) {
+        const y = (y0 + k) | 0;
+        if (y <= 1 || y >= H - 1) break;
+        const i = G.idx(x, y);
+        if (G.mat[i] === MAT.EMPTY) continue;
+        G.mat[i] = topMat;
+        G.life[i] = 0;
+      }
+    }
+
+    // Base rock + ore pockets
+    for (let y = 2; y < H - 2; y++) {
+      for (let x = 2; x < W - 2; x++) {
+        const i = G.idx(x, y);
+        if (G.mat[i] === MAT.EMPTY) continue;
+        const biome = G.biomeAt(x, y);
+        let base = MAT.ROCK;
+        if (biome === G.BIOME.DESERT) base = MAT.SANDSTONE;
+        if (biome === G.BIOME.TOXIC) base = MAT.ROCK;
+
+        const depth = y - (G.surfaceY ? (G.surfaceY[x] | 0) : 0);
+        if (depth > 220 && G.valueNoise2D(x + 111, y + 333, p.oreScale) < p.oreRate) base = MAT.DARK_ROCK;
+        if (depth > 120 && G.valueNoise2D(x + 777, y + 999, p.pocketScale) < p.pocketRate) base = MAT.SANDSTONE;
+
+        G.mat[i] = base;
+        G.life[i] = 0;
+      }
+    }
+
+    // Liquid pockets (rare)
+    const pockets = 16 + G.randi(10);
+    for (let n = 0; n < pockets; n++) {
+      const cx = 80 + G.randi(W - 160);
+      const cy = 120 + G.randi(H - 200);
+      const depth = cy - (G.surfaceY ? (G.surfaceY[cx] | 0) : 0);
+      if (depth < 80) continue;
+      const biome = G.biomeAt(cx, cy);
+      const r = 8 + G.randi(18);
+      carveCircle(cx, cy, r);
+      let mat = MAT.WATER;
+      if (depth > 420) mat = MAT.LAVA;
+      if (biome === G.BIOME.TOXIC) mat = MAT.ACID;
+      G.fillCircle(cx, cy, r - 1, mat, 0, (cur) => (cur === MAT.EMPTY || G.isGas(cur)));
+    }
+  }
+
+  function generateWorldV2() {
+    const p = ensureGen2Params();
+    if (G.setLoading) G.setLoading('Generating terrain...', 0.25);
+
+    // clear world
+    G.clearWorld();
+
+    // biomes
+    buildBiomeMap(p);
+
+    // heightmap
+    const surface = buildHeightmap(p);
+    const flatW = (G.CONF?.LEVEL_GEN?.spawnFlatWidth ?? 320) | 0;
+    applySpawnPlateau(surface, flatW);
+
+    // density field -> fill
+    for (let x = 1; x < W - 1; x++) {
+      const sy = surface[x] | 0;
+      for (let y = 1; y < H - 1; y++) {
+        const d = densityAt(x, y, sy, p);
+        if (y < sy - 2) {
+          G.mat[G.idx(x, y)] = MAT.EMPTY;
+          continue;
+        }
+        G.mat[G.idx(x, y)] = (d > 0) ? MAT.ROCK : MAT.EMPTY;
+      }
+    }
+
+    // CA caves
+    const caveData = genCavesCA(surface, p);
+    if (caveData.openRatio < 0.22) {
+      const extra = 10 + G.randi(8);
+      for (let k = 0; k < extra; k++) {
+        const cx = 60 + G.randi(W - 120);
+        const cy = (surface[cx] + 140 + G.randi(260)) | 0;
+        carveCircle(cx, cy, 8 + G.randi(14));
+      }
+    } else if (caveData.openRatio > 0.64) {
+      const fill = 1600 + G.randi(600);
+      for (let k = 0; k < fill; k++) {
+        const cx = 40 + G.randi(W - 80);
+        const cy = 120 + G.randi(H - 200);
+        const i = G.idx(cx, cy);
+        if (G.mat[i] === MAT.EMPTY && (cy > (surface[cx] + 40))) {
+          G.mat[i] = MAT.ROCK;
+          G.life[i] = 0;
+        }
+      }
+    }
+    carveFromCaves(caveData);
+
+    // spawn cavern + tunnels
+    const spawnX = (W * 0.5) | 0;
+    const spawnY = Math.max(8, (surface[spawnX] - 8) | 0);
+    carveCircle(spawnX, spawnY, 10);
+    for (let y = spawnY + 6; y < spawnY + 14; y++) {
+      const i = G.idx(spawnX, y);
+      G.mat[i] = MAT.ROCK;
+      G.life[i] = 0;
+    }
+
+    const targets = Math.max(2, p.tunnelCount | 0);
+    for (let t = 0; t < targets; t++) {
+      const tx = clampI((80 + G.randi(W - 160)) | 0, 40, W - 41);
+      const ty = clampI((surface[tx] + 160 + G.randi(220)) | 0, 40, H - 40);
+      carveWorm(spawnX, spawnY + 10, tx, ty, 4 + (G.randi(3) | 0));
+    }
+
+    // erosion
+    applyErosion(surface, p);
+
+    // strata + pockets
+    writeSurfaceArrays(surface);
+    applyStrata(surface, p);
+
+    // borders
+    addBorders();
+
+    // debug maps
+    const DBG_DS = 4;
+    const mapW = (W / DBG_DS) | 0;
+    const mapH = (H / DBG_DS) | 0;
+    const densityMap = new Uint8Array(mapW * mapH);
+    const solidMap = new Uint8Array(mapW * mapH);
+    const biomeMap = new Uint8Array(mapW * mapH);
+    const heightMap = new Uint16Array(mapW);
+
+    for (let y = 0; y < mapH; y++) {
+      for (let x = 0; x < mapW; x++) {
+        const wx = x * DBG_DS;
+        const wy = y * DBG_DS;
+        const sy = surface[clampI(wx, 0, W - 1)] | 0;
+        const d = densityAt(wx, wy, sy, p);
+        const v = clampI(((d + 1) * 0.5 * 255) | 0, 0, 255);
+        densityMap[x + y * mapW] = v;
+        solidMap[x + y * mapW] = (G.mat[G.idx(wx, wy)] !== MAT.EMPTY) ? 255 : 0;
+        biomeMap[x + y * mapW] = G.biomeAt(wx, wy);
+      }
+    }
+    for (let x = 0; x < mapW; x++) {
+      const wx = x * DBG_DS;
+      const h = surface[clampI(wx, 0, W - 1)] | 0;
+      heightMap[x] = clampI(((h / H) * mapH) | 0, 0, mapH - 1);
+    }
+
+    G.genDebug = {
+      mapW,
+      mapH,
+      density: densityMap,
+      solid: solidMap,
+      biome: biomeMap,
+      height: heightMap,
+      seed: G.seed | 0,
+      presetName: G.genPresetName,
+      params: [
+        `SURF ${p.surfaceBase.toFixed(2)} A${p.surfaceAmp.toFixed(2)}`,
+        `DENS ${p.densityAmp.toFixed(2)} R${p.ridgeAmp.toFixed(2)}`,
+        `CAVE ${p.caveFill.toFixed(2)} I${p.caveIter} O${(caveData.openRatio * 100).toFixed(0)}%`,
+        `WARP ${p.warpAmp | 0}`,
+        `ORE ${p.oreRate.toFixed(2)}`,
+        (G.genLastMutate ? `MUT ${G.genLastMutate}` : ''),
+      ].filter(Boolean),
+      mode: (G.genDebug && G.genDebug.mode) ? (G.genDebug.mode | 0) : 0,
+    };
+
+    generateSkyDecor(surface, {});
+  }
+
+  function generateWorld() {
+    // Use new pipeline
+    G._bulkGen = true;
+    generateWorldV2();
 
     // End of bulk generation.
     G._bulkGen = false;
@@ -2265,8 +2795,8 @@
     // Initialise temperature field.
     if (G.initTemperature) G.initTemperature();
 
-    // Debug payload for overlay (F2)
-    G.levelGenDebug = chosen;
+    // Rebuild visuals
+    if (G.rebuildBgCache) G.rebuildBgCache();
   }
   G.generateWorld = generateWorld;
 })();

@@ -447,15 +447,8 @@
         uiText(`chunk ${ci} ttl ${G.chunkTTL[ci] | 0} always ${G.chunkAlways[ci] | 0}`, 8, yDbg + 58, 0.65);
       }
 
-      // Worldgen validation summary (macro traversal)
-      const vg = G.levelGenDebug?.validation;
-      if (vg) {
-        uiText(
-          `worldgen ${vg.ok ? 'OK' : 'FAIL'}  tries ${vg.tries | 0}  path ${vg.pathLen | 0}`,
-          8,
-          yDbg + 66,
-          0.65,
-        );
+      if (G.genPresetName) {
+        uiText(`gen ${G.genPresetName}`, 8, yDbg + 66, 0.65);
       }
     }
   }
@@ -477,7 +470,8 @@
       '1..7 : wands | Tab / Shift+Tab : wand suivant/précédent',
       'R : regen monde (même seed) | N : seed suivante | Shift+R : seed aléatoire',
       'M : menu rapide',
-      'P/Echap : pause | H : HUD | T : aide (maintenir) | F1 : debug HUD | F2 : debug worldgen | F3 : qualité | G : postFX',
+      'P/Echap : pause | H : HUD | T : aide (maintenir) | F1 : debug HUD',
+      'F2 : gen debug | F4 : mode | F5 : regen | F6 : mutate | F7 : preset',
     ];
 
     const x = 4;
@@ -494,6 +488,110 @@
 
   G.renderHUD = renderHUD;
   G.renderHelp = renderHelp;
+
+  function renderGenDebug() {
+    if (!G.UI.showGenDebug) return;
+    const dbg = G.genDebug;
+    if (!dbg || !dbg.mapW || !dbg.mapH) return;
+
+    const mapW = dbg.mapW | 0;
+    const mapH = dbg.mapH | 0;
+    const scale = 2;
+    const pad = 4;
+    const mode = dbg.mode | 0;
+    const wide = (mode === 0);
+    const mapBlockW = mapW * scale;
+    const baseW = wide ? (mapBlockW * 2 + pad * 3) : (mapBlockW + pad * 2);
+    const panelW = Math.min(VIEW_W - 8, baseW + 140);
+    const panelH = Math.min(VIEW_H - 8, mapH * scale + pad * 2 + 46);
+    const x0 = 4;
+    const y0 = 4;
+
+    uiPanel(x0, y0, panelW, panelH, 0.22);
+
+    const modeNames = ['ALL', 'DENSITY', 'HEIGHT', 'BIOMES', 'SOLID'];
+    const modeName = modeNames[mode] || 'ALL';
+
+    uiText(`GEN DEBUG ${modeName}`, x0 + 4, y0 + 2, 0.9);
+    uiText(`SEED ${dbg.seed | 0}`, x0 + 4, y0 + 2 + UI_LINE, 0.72);
+    if (dbg.presetName) uiText(`PRESET ${dbg.presetName}`, x0 + 4, y0 + 2 + UI_LINE * 2, 0.72);
+
+    const mapX = x0 + pad;
+    const mapY = y0 + 2 + UI_LINE * 3 + 2;
+
+    function drawMap(data, colorFn, ox, oy) {
+      const ctx = G.ctx;
+      for (let y = 0; y < mapH; y++) {
+        const row = y * mapW;
+        const yy = oy + y * scale;
+        for (let x = 0; x < mapW; x++) {
+          const v = data[row + x] | 0;
+          ctx.fillStyle = colorFn(v, x, y);
+          ctx.fillRect(ox + x * scale, yy, scale, scale);
+        }
+      }
+    }
+
+    const density = dbg.density;
+    const solid = dbg.solid;
+    const biome = dbg.biome;
+
+    const biomeCol = (v) => {
+      const B = G.BIOME || {};
+      if (v === B.SNOW) return '#9fc4ff';
+      if (v === B.DESERT) return '#d3b06e';
+      if (v === B.TOXIC) return '#5bb47a';
+      return '#7f8aa3';
+    };
+
+    const grayCol = (v) => {
+      const c = (v & 255);
+      return `rgb(${c},${c},${c})`;
+    };
+
+    if (mode === 0) {
+      if (density) drawMap(density, grayCol, mapX, mapY);
+      if (biome) drawMap(biome, biomeCol, mapX + mapW * scale + pad, mapY);
+
+      if (dbg.height) {
+        const ctx = G.ctx;
+        ctx.fillStyle = 'rgba(255,255,255,0.22)';
+        ctx.fillRect(mapX, mapY + mapH * scale + pad, mapW * scale, 1);
+        for (let x = 0; x < mapW; x++) {
+          const h = dbg.height[x] | 0;
+          const y = mapY + mapH * scale + pad + (h * scale);
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(mapX + x * scale, y, scale, scale);
+        }
+      }
+    } else if (mode === 1 && density) {
+      drawMap(density, grayCol, mapX, mapY);
+    } else if (mode === 2 && dbg.height) {
+      const ctx = G.ctx;
+      for (let x = 0; x < mapW; x++) {
+        const h = dbg.height[x] | 0;
+        const y = mapY + h * scale;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(mapX + x * scale, y, scale, scale);
+      }
+    } else if (mode === 3 && biome) {
+      drawMap(biome, biomeCol, mapX, mapY);
+    } else if (mode === 4 && solid) {
+      drawMap(solid, (v) => (v ? '#ffffff' : '#000000'), mapX, mapY);
+    }
+
+    if (dbg.params) {
+      const lines = dbg.params;
+      let ty = y0 + 2 + UI_LINE * 3;
+      const tx = mapX + mapW * scale + pad + 2;
+      for (let i = 0; i < lines.length; i++) {
+        uiText(lines[i], tx, ty, 0.68);
+        ty += UI_LINE;
+      }
+    }
+  }
+
+  G.renderGenDebug = renderGenDebug;
 
   function renderMenu() {
     if (!G.UI.showMenu) return;

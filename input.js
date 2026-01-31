@@ -224,6 +224,23 @@
       return;
     }
 
+    if (anyDown(BIN.genDebugMode) && k === 'f4') {
+      if (G.genCycleDebugMode) G.genCycleDebugMode();
+      return;
+    }
+    if (anyDown(BIN.genRegen) && k === 'f5') {
+      if (G.genRegen) G.genRegen();
+      return;
+    }
+    if (anyDown(BIN.genMutate) && k === 'f6') {
+      if (G.genMutateParam) G.genMutateParam();
+      return;
+    }
+    if (anyDown(BIN.genPreset) && k === 'f7') {
+      if (G.genNextPreset) G.genNextPreset();
+      return;
+    }
+
     // Visual quality (Low/Med/High)
     if (anyDown(BIN.toggleQuality) && k === 'f3') {
       const V = (G.CONF && G.CONF.VISUALS) ? G.CONF.VISUALS : (G.CONF.VISUALS = {});

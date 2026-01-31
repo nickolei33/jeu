@@ -234,7 +234,7 @@
         }
 
         // ignite flammables
-        if ((m === MAT.OIL || m === MAT.WOOD) && G.rand01() < 0.33) {
+        if ((m === MAT.OIL || m === MAT.WOOD || m === MAT.LEAVES) && G.rand01() < 0.33) {
           G.setIndex(i, MAT.FIRE, 22 + G.randi(55), 0);
           continue;
         }
@@ -390,6 +390,7 @@
     if (m === MAT.SAND) tryMovePowder(x, y, i, MAT.SAND);
     else if (m === MAT.DIRT) tryMovePowder(x, y, i, MAT.DIRT);
     else if (m === MAT.SNOW) tryMovePowder(x, y, i, MAT.SNOW);
+    else if (m === MAT.LEAVES) updateLeaves(x, y, i);
 
     else if (m === MAT.WATER) tryMoveLiquid(x, y, i, MAT.WATER, 5);
     else if (m === MAT.OIL) tryMoveLiquid(x, y, i, MAT.OIL, 6);
@@ -402,6 +403,54 @@
     else if (m === MAT.ICE) updateIce(x, y, i);
 
     G.stamp[i] = G.frameId;
+  }
+
+  // Leaves: anchored to nearby wood, fall when detached.
+  const LEAF_ANCHOR = 6;
+  function updateLeaves(x, y, i) {
+    const mat = G.mat;
+    const life = G.life;
+
+    // Check for nearby wood within radius 2
+    let woodNear = false;
+    for (let oy = -2; oy <= 2 && !woodNear; oy++) {
+      const yy = y + oy;
+      if (yy <= 1 || yy >= H - 1) continue;
+      let ii = G.idx(x - 2, yy);
+      for (let ox = -2; ox <= 2; ox++, ii++) {
+        const xx = x + ox;
+        if (xx <= 1 || xx >= W - 1) continue;
+        if (mat[ii] === MAT.WOOD) { woodNear = true; break; }
+      }
+    }
+
+    // Propagate support through neighboring leaves
+    let support = 0;
+    if (woodNear) support = LEAF_ANCHOR;
+    else {
+      const n1 = i - W, n2 = i + W, n3 = i - 1, n4 = i + 1;
+      const n5 = i - W - 1, n6 = i - W + 1, n7 = i + W - 1, n8 = i + W + 1;
+      const nei = [n1, n2, n3, n4, n5, n6, n7, n8];
+      for (let k = 0; k < nei.length; k++) {
+        const j = nei[k];
+        if (mat[j] === MAT.LEAVES) {
+          const v = (life[j] | 0) - 1;
+          if (v > support) support = v;
+        }
+      }
+    }
+
+    if (support > 0) {
+      if ((life[i] | 0) < support) life[i] = support;
+      return;
+    }
+
+    if ((life[i] | 0) > 0) {
+      life[i] = (life[i] - 1) | 0;
+      return;
+    }
+
+    tryMovePowder(x, y, i, MAT.LEAVES);
   }
 
   function stepRegionNoFrame(x0, y0, x1, y1) {

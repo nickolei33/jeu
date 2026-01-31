@@ -51,6 +51,139 @@
     },
 
     // ------------------------------------------------------
+    // Level generation v2 (density + CA + biomes)
+    // ------------------------------------------------------
+    LEVEL_GEN2: {
+      presetIndex: 0,
+      presets: [
+        {
+          name: 'Balanced',
+          params: {
+            surfaceBase: 0.20,
+            surfaceAmp: 0.18,
+            surfaceScale: 220,
+            surfaceWarpScale: 420,
+            surfaceWarpAmp: 38,
+
+            densityScale: 85,
+            densityAmp: 0.55,
+            ridgeAmp: 0.35,
+            warpScale: 120,
+            warpAmp: 28,
+
+            caveFill: 0.54,
+            caveIter: 4,
+            caveScale: 2,
+            caveMinDepth: 26,
+
+            erosionPasses: 2,
+            slumpRate: 0.08,
+
+            oreRate: 0.18,
+            oreScale: 44,
+            pocketRate: 0.10,
+            pocketScale: 72,
+
+            tunnelCount: 4,
+          },
+        },
+        {
+          name: 'Caves Dense',
+          params: {
+            surfaceBase: 0.22,
+            surfaceAmp: 0.20,
+            surfaceScale: 200,
+            surfaceWarpScale: 380,
+            surfaceWarpAmp: 42,
+
+            densityScale: 90,
+            densityAmp: 0.60,
+            ridgeAmp: 0.40,
+            warpScale: 110,
+            warpAmp: 32,
+
+            caveFill: 0.58,
+            caveIter: 5,
+            caveScale: 2,
+            caveMinDepth: 30,
+
+            erosionPasses: 2,
+            slumpRate: 0.10,
+
+            oreRate: 0.22,
+            oreScale: 40,
+            pocketRate: 0.12,
+            pocketScale: 68,
+
+            tunnelCount: 3,
+          },
+        },
+        {
+          name: 'Caves Aerees',
+          params: {
+            surfaceBase: 0.18,
+            surfaceAmp: 0.16,
+            surfaceScale: 240,
+            surfaceWarpScale: 460,
+            surfaceWarpAmp: 34,
+
+            densityScale: 75,
+            densityAmp: 0.48,
+            ridgeAmp: 0.28,
+            warpScale: 130,
+            warpAmp: 26,
+
+            caveFill: 0.48,
+            caveIter: 3,
+            caveScale: 2,
+            caveMinDepth: 20,
+
+            erosionPasses: 2,
+            slumpRate: 0.06,
+
+            oreRate: 0.16,
+            oreScale: 50,
+            pocketRate: 0.08,
+            pocketScale: 80,
+
+            tunnelCount: 5,
+          },
+        },
+        {
+          name: 'Islands',
+          params: {
+            surfaceBase: 0.16,
+            surfaceAmp: 0.22,
+            surfaceScale: 180,
+            surfaceWarpScale: 380,
+            surfaceWarpAmp: 50,
+
+            densityScale: 70,
+            densityAmp: 0.50,
+            ridgeAmp: 0.50,
+            warpScale: 100,
+            warpAmp: 40,
+
+            caveFill: 0.50,
+            caveIter: 3,
+            caveScale: 2,
+            caveMinDepth: 18,
+
+            erosionPasses: 2,
+            slumpRate: 0.05,
+
+            oreRate: 0.14,
+            oreScale: 54,
+            pocketRate: 0.06,
+            pocketScale: 86,
+
+            tunnelCount: 6,
+          },
+        },
+      ],
+    },
+
+    // ------------------------------------------------------
     // Visuals (precomputed caches, pixel-art shading)
     // ------------------------------------------------------
     VISUALS: {
@@ -305,6 +438,10 @@
     toggleHelp: ['t', '?'],
     toggleDebug: ['f1'],
     toggleGenDebug: ['f2'],
+    genDebugMode: ['f4'],
+    genRegen: ['f5'],
+    genMutate: ['f6'],
+    genPreset: ['f7'],
     toggleQuality: ['f3'],
     togglePostFX: ['g'],
     togglePause: ['p', 'escape'],

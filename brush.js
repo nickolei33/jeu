@@ -20,6 +20,7 @@
     { name: 'Ice', mat: MAT.ICE },
     { name: 'Packed Snow', mat: MAT.PACKED_SNOW },
     { name: 'Wood', mat: MAT.WOOD },
+    { name: 'Leaves', mat: MAT.LEAVES },
     { name: 'Water', mat: MAT.WATER },
     { name: 'Oil', mat: MAT.OIL },
     { name: 'Acid', mat: MAT.ACID },

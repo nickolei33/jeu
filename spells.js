@@ -176,7 +176,7 @@
         }
 
         // Fire bolt can ignite flammables mid-flight
-        if (p.kind === 1 && (m === MAT.OIL || m === MAT.WOOD)) {
+        if (p.kind === 1 && (m === MAT.OIL || m === MAT.WOOD || m === MAT.LEAVES)) {
           if (G.rand01() < 0.22) {
             const j = G.idx(sx | 0, sy | 0);
             G.setIndex(j, MAT.FIRE, 22 + G.randi(45), 0);
