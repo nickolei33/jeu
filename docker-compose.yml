@@ -1,0 +1,21 @@
+services:
+  game:
+    build: .
+    ports:
+      - "2222:22"
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.jeu.rule=Host(`jeu.nico-c.info`)"
+      - "traefik.http.routers.jeu.entrypoints=websecure"
+      - "traefik.http.routers.jeu.tls=true"
+      - "traefik.http.routers.jeu.tls.certresolver=letsencrypt"
+      - "traefik.http.services.jeu.loadbalancer.server.port=8000"
+      - "traefik.docker.network=traefik_network"
+    networks:
+      - default
+      - traefik_network
+
+networks:
+  traefik_network:
+    external: true
