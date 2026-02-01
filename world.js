@@ -2385,14 +2385,88 @@
   }
 
   function buildHeightmap(p) {
+    const base = (H * p.surfaceBase);
     const surface = new Int16Array(W);
+    surface.fill(base | 0);
+
+    // Macro features (hills, valleys, ridges, plateaus, cliffs, talus)
+    const featureCount = clampI(p.featureCount | 0, 8, 40);
+    const ampMin = p.featureAmpMin ?? 20;
+    const ampMax = p.featureAmpMax ?? 140;
+    const wMin = p.featureWidthMin ?? 80;
+    const wMax = p.featureWidthMax ?? 600;
+
+    const wCliff = p.featureCliffChance ?? 0.10;
+    const wPlateau = p.featurePlateauChance ?? 0.18;
+    const wValley = p.featureValleyChance ?? 0.18;
+    const wRidge = p.featureRidgeChance ?? 0.18;
+
+    function bump(t) {
+      if (t <= 0) return 0;
+      return t * t * (3 - 2 * t);
+    }
+
+    for (let i = 0; i < featureCount; i++) {
+      const x0 = (G.rand01() * (W - 1)) | 0;
+      const w = clampI((wMin + G.rand01() * (wMax - wMin)) | 0, 20, W - 1);
+      const a = (ampMin + G.rand01() * (ampMax - ampMin));
+
+      const r = G.rand01();
+      let type = 'hill';
+      const t1 = wCliff;
+      const t2 = t1 + wPlateau;
+      const t3 = t2 + wValley;
+      const t4 = t3 + wRidge;
+      if (r < t1) type = 'cliff';
+      else if (r < t2) type = 'plateau';
+      else if (r < t3) type = 'valley';
+      else if (r < t4) type = 'ridge';
+
+      const xL = Math.max(1, x0 - w);
+      const xR = Math.min(W - 2, x0 + w);
+      for (let x = xL; x <= xR; x++) {
+        const t = (x - x0) / Math.max(1, w);
+        const at = Math.abs(t);
+        let f = 0;
+
+        if (type === 'hill') {
+          f = bump(1 - at);
+          surface[x] += (a * f) | 0;
+        } else if (type === 'valley') {
+          f = bump(1 - at);
+          surface[x] -= (a * f) | 0;
+        } else if (type === 'ridge') {
+          f = Math.pow(bump(1 - at), 0.6);
+          surface[x] += (a * f) | 0;
+        } else if (type === 'plateau') {
+          const p0 = 0.35;
+          if (at < p0) f = 1;
+          else f = bump(1 - (at - p0) / Math.max(1e-6, (1 - p0)));
+          surface[x] += (a * f) | 0;
+        } else if (type === 'cliff') {
+          const stepW = Math.max(8, (w * 0.12) | 0);
+          const d = x - x0;
+          if (Math.abs(d) <= stepW) {
+            f = bump(1 - Math.abs(d) / stepW);
+            surface[x] += (a * f) | 0;
+          } else if (d > 0) {
+            surface[x] += (a * 0.9) | 0;
+          }
+        } else {
+          // talus (long slope)
+          f = (t + 1) * 0.5;
+          surface[x] += (a * (f - 0.5)) | 0;
+        }
+      }
+    }
+
+    // Multi-scale noise + warp
     for (let x = 0; x < W; x++) {
       const warp = (G.valueNoise1D(x + 9000, p.surfaceWarpScale) - 0.5) * p.surfaceWarpAmp;
       const n = fbm1(x + warp, p.surfaceScale, 4);
-      const base = (H * p.surfaceBase);
       const amp = (H * p.surfaceAmp);
-      let h = (base + (n - 0.5) * amp + warp * 0.2) | 0;
-      h = clampI(h, 16, H - 32);
+      let h = surface[x] + ((n - 0.5) * amp) + warp * 0.2;
+      h = clampI(h | 0, 16, H - 32);
       surface[x] = h;
     }
     return surface;
