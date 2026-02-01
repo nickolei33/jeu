@@ -14,8 +14,8 @@
     { name: 'Water', cooldown: 0.10, cost: 5 },
     { name: 'Oil', cooldown: 0.10, cost: 5 },
     { name: 'Bomb', cooldown: 0.35, cost: 12 },
+    { name: 'Mega Bomb', cooldown: 0.70, cost: 18 },
     { name: 'Acid', cooldown: 0.18, cost: 8 },
-    { name: 'Freeze', cooldown: 0.20, cost: 8 },
   ];
 
   G.currentWand = 0;
@@ -29,9 +29,12 @@
     G.packRGBA(120, 190, 255, 255), // 2: Water
     G.packRGBA(190, 160, 90, 255),  // 3: Oil
     G.packRGBA(255, 230, 190, 255), // 4: Bomb (sparks)
-    G.packRGBA(90, 255, 120, 255),  // 5: Acid
-    G.packRGBA(200, 235, 255, 255), // 6: Freeze
+    G.packRGBA(255, 230, 120, 255), // 5: Mega Bomb
+    G.packRGBA(90, 255, 120, 255),  // 6: Acid
+    G.packRGBA(255, 200, 90, 255),  // 7: Mini Bomb
   ];
+
+  const MINI_BOMB_KIND = 7;
 
   G.clearProjectiles = () => {
     G.projectiles.length = 0;
@@ -60,9 +63,9 @@
     let ttl = 1.25;
 
     if (wand === 3) { speed = 118; ttl = 1.7; }
-    if (wand === 4) { speed = 96; ttl = 2.0; }
-    if (wand === 5) { speed = 132; ttl = 1.4; }
-    if (wand === 6) { speed = 126; ttl = 1.4; }
+    if (wand === 4) { speed = 160; ttl = 1.8; }
+    if (wand === 5) { speed = 170; ttl = 2.2; }
+    if (wand === 6) { speed = 132; ttl = 1.4; }
 
     G.projectiles.push({ x: ox, y: oy, vx: dx * speed, vy: dy * speed, ttl, kind: wand });
 
@@ -125,15 +128,85 @@
       depositLiquid(cx, cy, 7, MAT.OIL);
       if (G.burst) G.burst(cx, cy, 12, 0xffb57b3e, 0xff7a4e23, 55);
     } else if (kind === 4) {
-      G.carveCircle(cx, cy, 12);
-      G.igniteCircle(cx, cy, 13);
-      if (G.burst) G.burst(cx, cy, 40, 0xffffb13b, 0xffff7a2b, 120);
+      // High-power bomb
+      G.carveCircle(cx, cy, 22);
+      G.igniteCircle(cx, cy, 20);
+      if (G.addTempCircle) G.addTempCircle(cx, cy, 26, 180);
+
+      // Core flash + sparks
+      if (G.burst) {
+        G.burst(cx, cy, 90, 0xffffffff, 0xffffe08a, 220);
+        G.burst(cx, cy, 70, 0xffffb13b, 0xffff7a2b, 180);
+      }
+
+      // Debris spray (material particles)
+      if (G.burstMat) {
+        G.burstMat(MAT.DIRT, cx + 0.5, cy + 0.5, 120, 160, 0.35, 0.75);
+        G.burstMat(MAT.SAND, cx + 0.5, cy + 0.5, 80, 150, 0.30, 0.70);
+      }
     } else if (kind === 5) {
+      // Mega Bomb (10x+ power + cluster)
+      G.carveCircle(cx, cy, 48);
+      G.igniteCircle(cx, cy, 42);
+      if (G.addTempCircle) G.addTempCircle(cx, cy, 78, 1200);
+
+      // Lava core + molten ring (slightly reduced)
+      G.fillCircle(cx, cy, 20, MAT.LAVA, 250, (cur) => (cur === MAT.EMPTY || G.isGas(cur)));
+      const meltR = 40;
+      const meltR2 = meltR * meltR;
+      const x0 = Math.max(2, cx - meltR);
+      const x1 = Math.min(W - 3, cx + meltR);
+      const y0 = Math.max(2, cy - meltR);
+      const y1 = Math.min(H - 3, cy + meltR);
+      for (let y = y0; y <= y1; y++) {
+        for (let x = x0; x <= x1; x++) {
+          const dx = x - cx, dy = y - cy;
+          if (dx * dx + dy * dy > meltR2) continue;
+          const i = G.idx(x, y);
+          const m = G.mat[i] | 0;
+          if (m === MAT.ROCK || m === MAT.DARK_ROCK || m === MAT.SANDSTONE) {
+            if (G.rand01() < 0.55) G.setIndex(i, MAT.LAVA, 240);
+          } else if (m === MAT.DIRT || m === MAT.SAND) {
+            if (G.rand01() < 0.30) G.setIndex(i, MAT.LAVA, 210);
+          }
+        }
+      }
+
+      // Lava splash
+      if (G.burstMat) {
+        G.burstMat(MAT.LAVA, cx + 0.5, cy + 0.5, 60, 180, 0.18, 0.9);
+      }
+
+      if (G.burst) {
+        G.burst(cx, cy, 180, 0xffffffff, 0xffffe7b0, 280);
+        G.burst(cx, cy, 140, 0xffffb13b, 0xffff7a2b, 230);
+        G.burst(cx, cy, 90, 0xfff6faff, 0xff8fd6ff, 190);
+      }
+
+      if (G.burstMat) {
+        G.burstMat(MAT.DIRT, cx + 0.5, cy + 0.5, 220, 200, 0.30, 0.9);
+        G.burstMat(MAT.SAND, cx + 0.5, cy + 0.5, 160, 190, 0.25, 0.85);
+        G.burstMat(MAT.ROCK, cx + 0.5, cy + 0.5, 80, 160, 0.20, 0.75);
+      }
+
+      // Cluster mini bombs
+      const count = 8 + G.randi(5);
+      for (let i = 0; i < count; i++) {
+        const a = G.rand01() * Math.PI * 2;
+        const v = 110 + G.rand01() * 80;
+        const vx = Math.cos(a) * v;
+        const vy = Math.sin(a) * v - 60;
+        G.projectiles.push({ x: cx + 0.5, y: cy + 0.5, vx, vy, ttl: 0.8 + G.rand01() * 0.4, kind: MINI_BOMB_KIND });
+      }
+    } else if (kind === MINI_BOMB_KIND) {
+      // Mini bomb impact
+      G.carveCircle(cx, cy, 10);
+      G.igniteCircle(cx, cy, 10);
+      if (G.addTempCircle) G.addTempCircle(cx, cy, 14, 120);
+      if (G.burst) G.burst(cx, cy, 40, 0xffffd78a, 0xffff7a2b, 160);
+    } else if (kind === 6) {
       depositLiquid(cx, cy, 7, MAT.ACID);
       if (G.burst) G.burst(cx, cy, 16, 0xffb8ffcb, 0xff4cff6a, 75);
-    } else if (kind === 6) {
-      G.freezeCircle(cx, cy, 8);
-      if (G.burst) G.burst(cx, cy, 20, 0xffd7f0ff, 0xffbcd2ff, 85);
     }
   }
   G.applyImpact = applyImpact;
@@ -148,7 +221,7 @@
       }
 
       // gravity (bomb heavier)
-      p.vy += (p.kind === 4 ? 140 : 48) * dt;
+      p.vy += (p.kind === 4 || p.kind === 5 || p.kind === MINI_BOMB_KIND ? 180 : 48) * dt;
 
       const dx = p.vx * dt;
       const dy = p.vy * dt;
@@ -196,15 +269,16 @@
       if (G.spawnParticle) {
         const col = TRAIL_COL[p.kind | 0] || 0xffffffff;
         const sp = Math.hypot(p.vx, p.vy);
-        const n = (sp > 230) ? 2 : 1;
+        const n = (p.kind === 4) ? 5 : (sp > 230 ? 2 : 1);
         for (let k = 0; k < n; k++) {
           const jx = (Math.random() - 0.5) * 1.6;
           const jy = (Math.random() - 0.5) * 1.6;
           // Oppose the projectile velocity so the trail lingers a bit.
-          const tvx = -p.vx * 0.12 + (Math.random() - 0.5) * 26;
-          const tvy = -p.vy * 0.12 + (Math.random() - 0.5) * 26;
-          const life = 0.06 + Math.random() * 0.10;
-          G.spawnParticle(p.x + jx, p.y + jy, tvx, tvy, life, col, 1);
+          const tvx = -p.vx * 0.10 + (Math.random() - 0.5) * (p.kind === 4 ? 60 : 26);
+          const tvy = -p.vy * 0.10 + (Math.random() - 0.5) * (p.kind === 4 ? 60 : 26);
+          const life = (p.kind === 4 ? 0.18 : 0.06) + Math.random() * (p.kind === 4 ? 0.18 : 0.10);
+          const size = (p.kind === 4) ? 2 : 1;
+          G.spawnParticle(p.x + jx, p.y + jy, tvx, tvy, life, col, size);
         }
       }
     }

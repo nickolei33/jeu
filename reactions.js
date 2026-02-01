@@ -19,21 +19,21 @@
   // =========================================================
 
   const R = [
-    // Water + lava => steam + rock (violent)
-    { a: MAT.WATER, b: MAT.LAVA, prob: 0.55, aTo: MAT.STEAM, aLife: 60, bTo: MAT.ROCK, heatA: +40 },
+    // Water + lava => evaporates (no steam)
+    { a: MAT.WATER, b: MAT.LAVA, prob: 0.55, aTo: MAT.EMPTY, bTo: MAT.LAVA, heatA: +10 },
 
-    // Water + fire => steam (extinguish)
-    { a: MAT.WATER, b: MAT.FIRE, prob: 0.35, aTo: MAT.STEAM, aLife: 50, bTo: MAT.EMPTY, heatA: +25 },
+    // Water + fire => extinguish (no steam)
+    { a: MAT.WATER, b: MAT.FIRE, prob: 0.35, aTo: MAT.EMPTY, bTo: MAT.EMPTY, heatA: +10 },
 
     // Oil/wood + fire => more fire
     { a: MAT.OIL, b: MAT.FIRE, prob: 0.18, aTo: MAT.FIRE, aLife: 30 },
     { a: MAT.WOOD, b: MAT.FIRE, prob: 0.12, aTo: MAT.FIRE, aLife: 35 },
 
-    // Ice/snow + fire/lava => water
-    { a: MAT.ICE, b: MAT.FIRE, prob: 0.22, aTo: MAT.WATER },
-    { a: MAT.SNOW, b: MAT.FIRE, prob: 0.18, aTo: MAT.WATER },
-    { a: MAT.ICE, b: MAT.LAVA, prob: 0.35, aTo: MAT.WATER, heatA: +35 },
-    { a: MAT.SNOW, b: MAT.LAVA, prob: 0.30, aTo: MAT.WATER, heatA: +25 },
+    // Ice/snow + fire/lava => evaporates (no water/steam)
+    { a: MAT.ICE, b: MAT.FIRE, prob: 0.22, aTo: MAT.EMPTY, heatA: +10 },
+    { a: MAT.SNOW, b: MAT.FIRE, prob: 0.18, aTo: MAT.EMPTY, heatA: +8 },
+    { a: MAT.ICE, b: MAT.LAVA, prob: 0.35, aTo: MAT.EMPTY, heatA: +15 },
+    { a: MAT.SNOW, b: MAT.LAVA, prob: 0.30, aTo: MAT.EMPTY, heatA: +12 },
 
     // Acid corrodes soft materials
     { a: MAT.ACID, b: MAT.WOOD, prob: 0.14, bTo: MAT.EMPTY, heatA: +8 },

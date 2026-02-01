@@ -11,25 +11,8 @@
 
   // Ambient temperature as a function of biome + depth.
   // Tuned for "readable" gameplay rather than strict physics.
-  const BASE = {
-    [G.BIOME.SNOW]: -10,
-    [G.BIOME.MINES]: 12,
-    [G.BIOME.DESERT]: 26,
-    [G.BIOME.TOXIC]: 18,
-  };
-
-  function ambientTempAt(x, y) {
-    const b = G.biomeAt(x, y);
-    const depth01 = y / H;
-    let t = (BASE[b] ?? 12);
-
-    // Mild warming with depth, then a stronger "deep earth" curve.
-    t += depth01 * 45;
-    if (depth01 > 0.65) t += (depth01 - 0.65) * 120;
-
-    // Surface air a bit cooler (more comfortable gameplay near spawn).
-    if (y < 80) t -= 6;
-    return t | 0;
+  function ambientTempAt(_x, _y) {
+    return 21;
   }
   G.ambientTempAt = ambientTempAt;
 

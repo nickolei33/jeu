@@ -64,6 +64,7 @@
     else if (mat === MAT.ACID) { g = 305; drag = 2.1; bounce = 0.05; }
     else if (mat === MAT.SNOW) { g = 220; drag = 4.2; bounce = 0.02; }
     else if (mat === MAT.SAND || mat === MAT.DIRT) { g = 420; drag = 2.8; bounce = 0.08; }
+    else if (mat === MAT.LAVA) { g = 340; drag = 2.6; bounce = 0.04; }
 
     return { g, drag, bounce };
   }

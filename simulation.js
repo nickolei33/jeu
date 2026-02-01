@@ -273,7 +273,7 @@
         } else if (m === MAT.STEAM) {
           G.setIndex(i, MAT.SNOW, 0, G.SET_KEEP_TEMP);
         } else if (m === MAT.FIRE) {
-          G.setIndex(i, MAT.STEAM, 40 + G.randi(70), G.SET_KEEP_TEMP);
+          G.setIndex(i, MAT.EMPTY, 0, G.SET_KEEP_TEMP);
         } else if (m === MAT.EMPTY && G.rand01() < 0.35) {
           G.setIndex(i, MAT.SNOW, 0, G.SET_AMBIENT);
         }
@@ -344,12 +344,6 @@
     // Data-driven corrosion / neutralisation
     reactAround(x, y, i);
 
-    // Occasional fumes
-    if (G.rand01() < 0.010) {
-      G.setIndex(i, MAT.STEAM, 30 + G.randi(60), G.SET_KEEP_TEMP);
-      return;
-    }
-
     // slowly disappears
     if (G.rand01() < 0.002) {
       G.setIndex(i, MAT.EMPTY, 0, G.SET_KEEP_TEMP);
@@ -372,6 +366,17 @@
 
     // Data-driven reactions (water contact, etc.)
     reactAround(x, y, i);
+
+    // Visual embers / glow
+    if (G.spawnParticle && (G.frameId + i) % 6 === 0) {
+      const jx = (G.rand01() - 0.5) * 2.0;
+      const jy = (G.rand01() - 0.5) * 2.0;
+      const vx = (G.rand01() - 0.5) * 20;
+      const vy = -40 - G.rand01() * 40;
+      const life = 0.08 + G.rand01() * 0.10;
+      const col = (G.rand01() < 0.5) ? 0xffffb13b : 0xffff7a2b;
+      G.spawnParticle(x + 0.5 + jx, y + 0.5 + jy, vx, vy, life, col, 1);
+    }
   }
 
   // Ice is handled by temperature-driven phase changes.

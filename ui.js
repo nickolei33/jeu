@@ -316,8 +316,8 @@
 
     // Top-left HP/MP
     const x0 = 4, y0 = 4;
-    const hudW = 110;
-    const hudH = UI_LINE * 2 + 4;
+    const hudW = 140;
+    const hudH = UI_LINE * 4 + 4;
     uiPanel(x0, y0, hudW, hudH, 0.18);
     const hpY = y0 + 2;
     uiText('HP', x0 + 4, hpY, 0.75);
@@ -359,6 +359,48 @@
     const brushName = uiTextTrim(`${G.BRUSHES[G.brushIndex].name}`, hudW - 20);
     uiText(brushName, bx + 16, by + 2, 0.82);
     uiText(`R=${G.paintRadius}`, bx + 16, by + 2 + UI_LINE, 0.65);
+
+    // Hover info (cell/particle under cursor)
+    let hoverName = 'NONE';
+    let hoverTemp = 0;
+    const mouse = G.mouse;
+    if (mouse && G.inb(mouse.worldX | 0, mouse.worldY | 0)) {
+      const mx = mouse.worldX | 0;
+      const my = mouse.worldY | 0;
+      const idx = G.idx(mx, my);
+      const m = G.mat[idx] | 0;
+      hoverTemp = (G.temp && G.temp[idx] != null) ? (G.temp[idx] | 0) : 0;
+      hoverName = G.matName?.[m] || String(m);
+
+      // Prefer material particles if one is under cursor
+      const mp = G.matParticles;
+      if (mp && mp.length) {
+        let best = -1;
+        let bestD = 9; // radius^2
+        for (let i = 0; i < mp.length; i++) {
+          const p = mp[i];
+          const dx = p.x - mouse.worldX;
+          const dy = p.y - mouse.worldY;
+          const d = dx * dx + dy * dy;
+          if (d < bestD) {
+            bestD = d;
+            best = i;
+          }
+        }
+        if (best >= 0) {
+          const pm = mp[best].mat | 0;
+          hoverName = `PART ${G.matName?.[pm] || pm}`;
+        } else {
+          hoverName = `CELL ${hoverName}`;
+        }
+      } else {
+        hoverName = `CELL ${hoverName}`;
+      }
+    }
+
+    const hoverLine = uiTextTrim(hoverName, hudW - 8);
+    uiText(hoverLine, bx + 4, by + 2 + UI_LINE * 2, 0.75);
+    uiText(`T=${hoverTemp}C`, bx + 4, by + 2 + UI_LINE * 3, 0.70);
 
     // Message log (top, under the bars)
     // Helps communicate systems and make deaths feel fair.
