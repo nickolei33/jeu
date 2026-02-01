@@ -509,7 +509,7 @@
 
     uiPanel(x0, y0, panelW, panelH, 0.22);
 
-    const modeNames = ['ALL', 'DENSITY', 'HEIGHT', 'BIOMES', 'SOLID'];
+    const modeNames = ['ALL', 'DENSITY', 'HEIGHT', 'BIOMES', 'SOLID', 'SLOPE', 'SOIL', 'GRASS'];
     const modeName = modeNames[mode] || 'ALL';
 
     uiText(`GEN DEBUG ${modeName}`, x0 + 4, y0 + 2, 0.9);
@@ -578,6 +578,12 @@
       drawMap(biome, biomeCol, mapX, mapY);
     } else if (mode === 4 && solid) {
       drawMap(solid, (v) => (v ? '#ffffff' : '#000000'), mapX, mapY);
+    } else if (mode === 5 && dbg.slope) {
+      drawMap(dbg.slope, grayCol, mapX, mapY);
+    } else if (mode === 6 && dbg.soil) {
+      drawMap(dbg.soil, (v) => `rgb(${v},${Math.min(255, v + 40)},${v >> 1})`, mapX, mapY);
+    } else if (mode === 7 && dbg.grass) {
+      drawMap(dbg.grass, (v) => (v ? '#3f9f5b' : '#000000'), mapX, mapY);
     }
 
     if (dbg.params) {

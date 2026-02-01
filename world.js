@@ -22,9 +22,13 @@
   // 0 = none, else packed RGBA (Uint32)
   G.bgDeco = new Uint32Array(N);
 
+  // Surface masks
+  G.grassMask = new Uint8Array(N);
+
   // Surface profile (used for sky rendering / outdoor ambience)
   G.surfaceY = new Int16Array(W);
   G.surfaceBiome = new Uint8Array(W);
+  G.soilThickness = new Uint8Array(W);
 
 
   G.idx = (x, y) => (x | 0) + (y | 0) * W;
@@ -163,6 +167,8 @@
 
     // visual-only buffers
     if (G.bgDeco) G.bgDeco.fill(0);
+    if (G.grassMask) G.grassMask.fill(0);
+    if (G.soilThickness) G.soilThickness.fill(0);
     if (G.surfaceY) G.surfaceY.fill(0);
     if (G.surfaceBiome) G.surfaceBiome.fill(0);
   };
@@ -2240,6 +2246,8 @@
     tunnelCount: { min: 2, max: 8, step: 1 },
   };
 
+  G.genDebugModeCount = 8;
+
   function cloneParams(p) {
     return JSON.parse(JSON.stringify(p));
   }
@@ -2296,7 +2304,8 @@
 
   G.genCycleDebugMode = () => {
     G.genDebug = G.genDebug || {};
-    G.genDebug.mode = ((G.genDebug.mode | 0) + 1) % 5;
+    const modes = G.genDebugModeCount || 7;
+    G.genDebug.mode = ((G.genDebug.mode | 0) + 1) % modes;
   };
 
   function ridge01(n) {
@@ -2367,6 +2376,11 @@
       const bx = clampI(((x / W) * bw) | 0, 0, bw - 1);
       const by = clampI(((y / H) * bh) | 0, 0, bh - 1);
       return map[bx + by * bw] | 0;
+    };
+    G.getActiveBiome = () => {
+      const px = (G.player?.x ?? (W * 0.5)) | 0;
+      const py = (G.player?.y ?? (H * 0.2)) | 0;
+      return G.biomeAt(px, py) | 0;
     };
   }
 
@@ -2597,15 +2611,26 @@
   }
 
   function applyStrata(surface, p) {
+    if (G.grassMask) G.grassMask.fill(0);
     for (let x = 1; x < W - 1; x++) {
       const y0 = surface[x] | 0;
       const biome = G.surfaceBiome ? (G.surfaceBiome[x] | 0) : G.biomeAt(x, y0);
+
+      const slope = Math.abs((surface[x + 1] | 0) - (surface[x - 1] | 0));
+      const curvature = ((surface[x - 1] | 0) + (surface[x + 1] | 0) - 2 * y0);
 
       let topMat = MAT.DIRT;
       let topDepth = 3;
       if (biome === G.BIOME.SNOW) { topMat = MAT.SNOW; topDepth = 3; }
       if (biome === G.BIOME.DESERT) { topMat = MAT.SAND; topDepth = 4; }
       if (biome === G.BIOME.TOXIC) { topMat = MAT.DIRT; topDepth = 3; }
+
+      // Soil thickness modulation
+      let soil = topDepth + clampI((curvature * 0.45) | 0, -2, 4);
+      soil = clampI(soil, 2, 10);
+      if (biome === G.BIOME.DESERT) soil = clampI(soil - 1, 2, 8);
+      topDepth = soil;
+      if (G.soilThickness) G.soilThickness[x] = topDepth;
 
       for (let k = 0; k < topDepth; k++) {
         const y = (y0 + k) | 0;
@@ -2614,6 +2639,11 @@
         if (G.mat[i] === MAT.EMPTY) continue;
         G.mat[i] = topMat;
         G.life[i] = 0;
+
+        // Grass mask: only on gentle slopes and exposed top layer
+        if (k === 0 && topMat === MAT.DIRT && slope < 6) {
+          if (G.grassMask) G.grassMask[i] = 1;
+        }
       }
     }
 
@@ -2681,45 +2711,36 @@
       }
     }
 
-    // CA caves
-    const caveData = genCavesCA(surface, p);
-    if (caveData.openRatio < 0.22) {
-      const extra = 10 + G.randi(8);
-      for (let k = 0; k < extra; k++) {
-        const cx = 60 + G.randi(W - 120);
-        const cy = (surface[cx] + 140 + G.randi(260)) | 0;
-        carveCircle(cx, cy, 8 + G.randi(14));
-      }
-    } else if (caveData.openRatio > 0.64) {
-      const fill = 1600 + G.randi(600);
-      for (let k = 0; k < fill; k++) {
-        const cx = 40 + G.randi(W - 80);
-        const cy = 120 + G.randi(H - 200);
-        const i = G.idx(cx, cy);
-        if (G.mat[i] === MAT.EMPTY && (cy > (surface[cx] + 40))) {
-          G.mat[i] = MAT.ROCK;
-          G.life[i] = 0;
+    // Optional caves (disabled by default)
+    let caveData = null;
+    if (p.enableCaves) {
+      caveData = genCavesCA(surface, p);
+      if (caveData.openRatio < 0.22) {
+        const extra = 10 + G.randi(8);
+        for (let k = 0; k < extra; k++) {
+          const cx = 60 + G.randi(W - 120);
+          const cy = (surface[cx] + 140 + G.randi(260)) | 0;
+          carveCircle(cx, cy, 8 + G.randi(14));
+        }
+      } else if (caveData.openRatio > 0.64) {
+        const fill = 1600 + G.randi(600);
+        for (let k = 0; k < fill; k++) {
+          const cx = 40 + G.randi(W - 80);
+          const cy = 120 + G.randi(H - 200);
+          const i = G.idx(cx, cy);
+          if (G.mat[i] === MAT.EMPTY && (cy > (surface[cx] + 40))) {
+            G.mat[i] = MAT.ROCK;
+            G.life[i] = 0;
+          }
         }
       }
+      carveFromCaves(caveData);
     }
-    carveFromCaves(caveData);
 
-    // spawn cavern + tunnels
+    // Spawn clearance (surface only, no caves)
     const spawnX = (W * 0.5) | 0;
     const spawnY = Math.max(8, (surface[spawnX] - 8) | 0);
-    carveCircle(spawnX, spawnY, 10);
-    for (let y = spawnY + 6; y < spawnY + 14; y++) {
-      const i = G.idx(spawnX, y);
-      G.mat[i] = MAT.ROCK;
-      G.life[i] = 0;
-    }
-
-    const targets = Math.max(2, p.tunnelCount | 0);
-    for (let t = 0; t < targets; t++) {
-      const tx = clampI((80 + G.randi(W - 160)) | 0, 40, W - 41);
-      const ty = clampI((surface[tx] + 160 + G.randi(220)) | 0, 40, H - 40);
-      carveWorm(spawnX, spawnY + 10, tx, ty, 4 + (G.randi(3) | 0));
-    }
+    carveCircle(spawnX, spawnY, 8);
 
     // erosion
     applyErosion(surface, p);
@@ -2739,6 +2760,9 @@
     const solidMap = new Uint8Array(mapW * mapH);
     const biomeMap = new Uint8Array(mapW * mapH);
     const heightMap = new Uint16Array(mapW);
+    const slopeMap = new Uint8Array(mapW * mapH);
+    const soilMap = new Uint8Array(mapW * mapH);
+    const grassMap = new Uint8Array(mapW * mapH);
 
     for (let y = 0; y < mapH; y++) {
       for (let x = 0; x < mapW; x++) {
@@ -2747,9 +2771,15 @@
         const sy = surface[clampI(wx, 0, W - 1)] | 0;
         const d = densityAt(wx, wy, sy, p);
         const v = clampI(((d + 1) * 0.5 * 255) | 0, 0, 255);
-        densityMap[x + y * mapW] = v;
-        solidMap[x + y * mapW] = (G.mat[G.idx(wx, wy)] !== MAT.EMPTY) ? 255 : 0;
-        biomeMap[x + y * mapW] = G.biomeAt(wx, wy);
+        const idx = x + y * mapW;
+        densityMap[idx] = v;
+        solidMap[idx] = (G.mat[G.idx(wx, wy)] !== MAT.EMPTY) ? 255 : 0;
+        biomeMap[idx] = G.biomeAt(wx, wy);
+        const s = Math.abs((surface[clampI(wx + 1, 0, W - 1)] | 0) - (surface[clampI(wx - 1, 0, W - 1)] | 0));
+        slopeMap[idx] = clampI((s * 10) | 0, 0, 255);
+        const soil = G.soilThickness ? (G.soilThickness[clampI(wx, 0, W - 1)] | 0) : 0;
+        soilMap[idx] = clampI(soil * 18, 0, 255);
+        grassMap[idx] = (G.grassMask && G.grassMask[G.idx(wx, wy)]) ? 255 : 0;
       }
     }
     for (let x = 0; x < mapW; x++) {
@@ -2765,12 +2795,15 @@
       solid: solidMap,
       biome: biomeMap,
       height: heightMap,
+      slope: slopeMap,
+      soil: soilMap,
+      grass: grassMap,
       seed: G.seed | 0,
       presetName: G.genPresetName,
       params: [
         `SURF ${p.surfaceBase.toFixed(2)} A${p.surfaceAmp.toFixed(2)}`,
         `DENS ${p.densityAmp.toFixed(2)} R${p.ridgeAmp.toFixed(2)}`,
-        `CAVE ${p.caveFill.toFixed(2)} I${p.caveIter} O${(caveData.openRatio * 100).toFixed(0)}%`,
+        `CAVE ${p.enableCaves ? 'ON' : 'OFF'}`,
         `WARP ${p.warpAmp | 0}`,
         `ORE ${p.oreRate.toFixed(2)}`,
         (G.genLastMutate ? `MUT ${G.genLastMutate}` : ''),
@@ -2778,7 +2811,8 @@
       mode: (G.genDebug && G.genDebug.mode) ? (G.genDebug.mode | 0) : 0,
     };
 
-    generateSkyDecor(surface, {});
+    if (G.bgDeco) G.bgDeco.fill(0);
+    if (G.enableSkyDecor) generateSkyDecor(surface, {});
   }
 
   function generateWorld() {

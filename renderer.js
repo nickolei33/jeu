@@ -100,6 +100,15 @@
 
     camera.x = G.clamp(camera.x, 0, WORLD_W - VIEW_W);
     camera.y = G.clamp(camera.y, 0, WORLD_H - VIEW_H);
+
+    // Switch background set on biome change (rare)
+    if (G.biomeAt && player) {
+      const b = G.biomeAt(player.x | 0, player.y | 0) | 0;
+      if (G._bgBiome !== b) {
+        G._bgBiome = b;
+        if (G.rebuildBgCache) G.rebuildBgCache();
+      }
+    }
   };
 
   /* =========================================================
@@ -744,6 +753,17 @@
 
     const seed = (G.seed | 0) >>> 0;
 
+    // Matte painting backgrounds (fixed per-biome)
+    if (G.buildMatteSky && G.selectBackgroundSet) {
+      const biome = (typeof G.getActiveBiome === 'function') ? G.getActiveBiome() : null;
+      const set = G.selectBackgroundSet(biome);
+      if (set) {
+        base.fill(0); l0.fill(0); l1.fill(0); l2.fill(0); l3.fill(0); mid.fill(0);
+        G.buildMatteSky(base, l0, l1, l2, l3, mid, set);
+        return;
+      }
+    }
+
     // Horizon anchored loosely to the average surface
     let horizon = 220;
     const surf = G.surfaceY;
@@ -1306,6 +1326,17 @@
               const f = (G.frameId + (wx << 1) + (wy << 2)) & 7;
               col = f ? style.hi[pi] : style.pal[pi];
             }
+            // Grass tint (overlay on top soil)
+            if (m === MAT.DIRT && G.grassMask && G.grassMask[i]) {
+              let r = col & 255;
+              let g = (col >>> 8) & 255;
+              let b = (col >>> 16) & 255;
+              r = clamp((r * 0.65 + 24) | 0, 0, 255);
+              g = clamp((g * 0.85 + 60) | 0, 0, 255);
+              b = clamp((b * 0.65 + 18) | 0, 0, 255);
+              col = 0xff000000 | (b << 16) | (g << 8) | r;
+            }
+
             pix32[out++] = col;
 
           } else {

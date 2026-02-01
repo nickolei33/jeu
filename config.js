@@ -71,6 +71,7 @@
             warpScale: 120,
             warpAmp: 28,
 
+            enableCaves: false,
             caveFill: 0.54,
             caveIter: 4,
             caveScale: 2,
@@ -102,6 +103,7 @@
             warpScale: 110,
             warpAmp: 32,
 
+            enableCaves: false,
             caveFill: 0.58,
             caveIter: 5,
             caveScale: 2,
@@ -133,6 +135,7 @@
             warpScale: 130,
             warpAmp: 26,
 
+            enableCaves: false,
             caveFill: 0.48,
             caveIter: 3,
             caveScale: 2,
@@ -164,6 +167,7 @@
             warpScale: 100,
             warpAmp: 40,
 
+            enableCaves: false,
             caveFill: 0.50,
             caveIter: 3,
             caveScale: 2,
